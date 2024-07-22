@@ -2,7 +2,12 @@ package main
 
 import (
 	"STTMain/internal/config"
+	"STTMain/internal/server"
+	"STTMain/internal/service"
+	"context"
+	"fmt"
 	"log/slog"
+	"net"
 	"os"
 )
 
@@ -14,6 +19,7 @@ const (
 
 func main() {
 	// Запуск
+	// команда для запуска go run cmd/stt/main.go --config=./config/local.yaml
 	cfg := config.MustLoad()
 
 	// инициализация логера
@@ -24,6 +30,24 @@ func main() {
 	// TODO: инициализация приложения (app)
 
 	// TODO: запустить gRPC-сервер приложение
+
+	var sttService service.SpeedTypingTestService
+
+	grpcServer := server.NewServer(sttService)
+
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.GRPC.Port))
+	if err != nil {
+		log.Error("falied to start gRPC server", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	log.Info("starting gRPC server", slog.String("address", listener.Addr().String()))
+	if err := grpcServer.Start(listener); err != nil {
+		log.Error("falied to start gRPC server", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	// Gracefully stop the gRPC server when done
+	grpcServer.Stop(context.Background())
 }
 
 // для логгера
