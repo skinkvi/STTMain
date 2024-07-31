@@ -2,13 +2,15 @@ package main
 
 import (
 	"STTMain/internal/config"
-	"STTMain/internal/server"
-	"STTMain/internal/service"
-	"context"
-	"fmt"
+	"STTMain/internal/storage"
+	"encoding/json"
+	"html/template"
 	"log/slog"
-	"net"
+	"net/http"
 	"os"
+	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -16,6 +18,12 @@ const (
 	envDev   = "dev"
 	envProd  = "prod"
 )
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
 
 func main() {
 	// Запуск
@@ -27,27 +35,104 @@ func main() {
 
 	log.Info("starting application", slog.String("env", cfg.Env))
 
-	// TODO: инициализация приложения (app)
-
-	// TODO: запустить gRPC-сервер приложение
-
-	var sttService service.SpeedTypingTestService
-
-	grpcServer := server.NewServer(sttService)
-
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.GRPC.Port))
+	// Инициализация хранилища
+	postgresStorage, err := storage.NewPostgresStorage(cfg.Storage.Postgres.URL)
 	if err != nil {
-		log.Error("falied to start gRPC server", slog.String("error", err.Error()))
+		log.Error("failed to initialize Postgres storage", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	log.Info("starting gRPC server", slog.String("address", listener.Addr().String()))
-	if err := grpcServer.Start(listener); err != nil {
-		log.Error("falied to start gRPC server", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
+	defer postgresStorage.Close()
 
-	// Gracefully stop the gRPC server when done
-	grpcServer.Stop(context.Background())
+	// Инициализация сервиса
+
+	// Настройка HTTP сервера
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		tmpl := template.Must(template.ParseFiles("templates/index.html"))
+		tmpl.Execute(w, nil)
+	})
+
+	http.HandleFunc("/api/text", func(w http.ResponseWriter, r *http.Request) {
+		words, err := postgresStorage.GetRandomWords(25)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"text": words[0].Text})
+	})
+
+	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Error("failed to upgrade WebSocket connection", slog.String("error", err.Error()))
+			return
+		}
+		defer conn.Close()
+
+		// Отправка текста для ввода
+		words, err := postgresStorage.GetRandomWords(25)
+		if err != nil {
+			log.Error("failed to get random words", slog.String("error", err.Error()))
+			return
+		}
+		textToType := ""
+		for _, word := range words {
+			textToType += word.Text + " "
+		}
+		conn.WriteJSON(map[string]string{"type": "text", "text": textToType})
+
+		// Обработка ввода пользователя
+		startTime := time.Now()
+		var inputText string
+		var correctIndices []int
+		var incorrectIndices []int
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				log.Error("failed to read WebSocket message", slog.String("error", err.Error()))
+				break
+			}
+			var data struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			}
+			if err := json.Unmarshal(msg, &data); err != nil {
+				log.Error("failed to unmarshal WebSocket message", slog.String("error", err.Error()))
+				continue
+			}
+			if data.Type == "input" {
+				inputText = data.Text
+				correctIndices, incorrectIndices = highlightErrors(textToType, inputText)
+				conn.WriteJSON(map[string]interface{}{
+					"type":      "highlight",
+					"correct":   correctIndices,
+					"incorrect": incorrectIndices,
+				})
+			}
+			if len(inputText) >= len(textToType) {
+				break
+			}
+		}
+
+		// Подсчет ошибок и скорости
+		endTime := time.Now()
+		duration := endTime.Sub(startTime)
+		errors := len(incorrectIndices)
+		speed := float64(len(inputText)) / duration.Minutes()
+
+		// Отправка результатов
+		conn.WriteJSON(map[string]interface{}{
+			"type":   "result",
+			"errors": errors,
+			"speed":  speed,
+		})
+	})
+
+	log.Info("starting HTTP server", slog.String("address", ":8080"))
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		log.Error("failed to start HTTP server", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 }
 
 // для логгера
@@ -72,14 +157,17 @@ func setupLogger(env string) *slog.Logger {
 	return log
 }
 
-// func setupPrettySlog() *slog.Logger {
-// 	opts := slogpretty.PrettyHandlerOptions{
-// 		SlogOpts: &slog.HandlerOptions{
-// 			Level: slog.LevelDebug,
-// 		},
-// 	}
+func highlightErrors(textToType, inputText string) ([]int, []int) {
+	var correctIndices []int
+	var incorrectIndices []int
 
-// 	handler := opts.NewPrettyHandler(os.Stdout)
+	for i, char := range inputText {
+		if i < len(textToType) && char == rune(textToType[i]) {
+			correctIndices = append(correctIndices, i)
+		} else {
+			incorrectIndices = append(incorrectIndices, i)
+		}
+	}
 
-// 	return slog.New(handler)
-// }
+	return correctIndices, incorrectIndices
+}

@@ -10,13 +10,13 @@ import (
 )
 
 type Server struct {
-	sttService service.SpeedTypingTestService
+	sttService *service.SpeedTypingTestService
 	grpcServer *grpc.Server
 }
 
-func NewServer(sttService service.SpeedTypingTestService) *Server {
+func NewServer(sttService *service.SpeedTypingTestService) *Server {
 	grpcServer := grpc.NewServer()
-	sttv1.RegisterSpeedTypingTestServer(grpcServer, &sttService)
+	sttv1.RegisterSpeedTypingTestServer(grpcServer, sttService)
 
 	return &Server{
 		sttService: sttService,

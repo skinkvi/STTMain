@@ -1,0 +1,88 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speed Typing Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #text-to-type {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+        }
+        #user-input {
+            width: 100%;
+            height: 100px;
+            font-size: 1em;
+        }
+        #result {
+            margin-top: 20px;
+        }
+        .correct {
+            color: green;
+        }
+        .incorrect {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Speed Typing Test</h1>
+    <div id="text-to-type"></div>
+    <textarea id="user-input" placeholder="Type the text here..."></textarea>
+    <div id="result"></div>
+
+    <script>
+        const textToTypeDiv = document.getElementById('text-to-type');
+        const userInput = document.getElementById('user-input');
+        const resultDiv = document.getElementById('result');
+
+        const socket = new WebSocket('ws://' + location.host + '/ws');
+
+        socket.onopen = function() {
+            console.log('WebSocket connection established');
+        };
+
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === 'text') {
+                textToTypeDiv.innerText = data.text;
+            } else if (data.type === 'result') {
+                resultDiv.innerText = `Errors: ${data.errors}, Speed: ${data.speed} symbols per minute`;
+            } else if (data.type === 'highlight') {
+                highlightErrors(data.correct, data.incorrect);
+            }
+        };
+
+        userInput.addEventListener('input', function() {
+            const inputText = userInput.value;
+            socket.send(JSON.stringify({ type: 'input', text: inputText }));
+        });
+
+        function highlightErrors(correct, incorrect) {
+            const text = textToTypeDiv.innerText;
+            let highlightedText = '';
+            let correctIndex = 0;
+            let incorrectIndex = 0;
+
+            for (let i = 0; i < text.length; i++) {
+                if (correctIndex < correct.length && i === correct[correctIndex]) {
+                    highlightedText += `<span class="correct">${text[i]}</span>`;
+                    correctIndex++;
+                } else if (incorrectIndex < incorrect.length && i === incorrect[incorrectIndex]) {
+                    highlightedText += `<span class="incorrect">${text[i]}</span>`;
+                    incorrectIndex++;
+                } else {
+                    highlightedText += text[i];
+                }
+            }
+
+            textToTypeDiv.innerHTML = highlightedText;
+        }
+    </script>
+</body>
+</html>

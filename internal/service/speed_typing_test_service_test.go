@@ -1,25 +1,17 @@
 package service
 
-import (
-	"context"
-	"testing"
+// func TestStartTest(t *testing.T) {
+// 	sut, err := NewSpeedTypingTestService()
+// 	assert.NilError(t, err)
 
-	sttv1 "github.com/skinkvi/protosSTT/gen/go/stt"
-	"gotest.tools/assert"
-)
+// 	ctx := context.Background()
+// 	req := &sttv1.StartTestRequest{
+// 		UserId: "testUser",
+// 	}
 
-func TestStartTest(t *testing.T) {
-	sut, err := NewSpeedTypingTestService()
-	assert.NilError(t, err)
+// 	res, err := sut.StartTest(ctx, req)
 
-	ctx := context.Background()
-	req := &sttv1.StartTestRequest{
-		UserId: "testUser",
-	}
-
-	res, err := sut.StartTest(ctx, req)
-
-	assert.NilError(t, err)
-	assert.Assert(t, len(res.TextToType) > 0)
-	assert.Assert(t, res.UserId == req.UserId)
-}
+// 	assert.NilError(t, err)
+// 	assert.Assert(t, len(res.TextToType) > 0)
+// 	assert.Assert(t, res.UserId == req.UserId)
+// }

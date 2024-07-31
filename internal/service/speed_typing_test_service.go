@@ -1,73 +1,50 @@
 package service
 
 import (
-	"bufio"
-	"context"
-	"math/rand"
-	"os"
-	"time"
+	"STTMain/internal/storage"
 
 	sttv1 "github.com/skinkvi/protosSTT/gen/go/stt"
 )
 
-//TODO: Сейчас тут используется файл words.txt для хранения слов, они потом записываются в слайс и потом выводятся это все вообще не круто нужно придумать какой то другой способ для того что бы хранить слова и выдалвать эти слова прользователю
-
-//TODO: Сделать что то нормальное  с ошибками мне не нравиться реализация по типу
-// if err != nil {
-// 	return nil, err
-// }
-// вот как по мне это прям гавнище так что нужно что то сделать
-
 type SpeedTypingTestService struct {
 	sttv1.UnimplementedSpeedTypingTestServer
-	words []string
-	// здесь нужно записать зависимости к примеру storage
+	storage *storage.PostgresStorage
 }
 
-func NewSpeedTypingTestService() (*SpeedTypingTestService, error) {
-	words, err := readWordsFromFile("words.txt")
-	if err != nil {
-		return nil, err
-	}
-
+func NewSpeedTypingTestService(storage *storage.PostgresStorage) (*SpeedTypingTestService, error) {
 	return &SpeedTypingTestService{
-		words: words,
+		storage: storage,
 	}, nil
 }
 
-func (s *SpeedTypingTestService) StartTest(ctx context.Context, req *sttv1.StartTestRequest) (*sttv1.StartTestResponse, error) {
-	rand.Seed(time.Now().UnixNano())
-	wordIndex := rand.Intn(len(s.words))
-	word := s.words[wordIndex]
+// func (s *SpeedTypingTestService) StartTest(ctx context.Context, req *sttv1.StartTestRequest) (*sttv1.StartTestResponse, error) {
+// 	words, err := s.storage.GetRandomWords(1)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to get random words: %w", err)
+// 	}
+// 	if len(words) == 0 {
+// 		return nil, fmt.Errorf("no words found")
+// 	}
+// 	return &sttv1.StartTestResponse{
+// 		UserId:     req.UserId,
+// 		TextToType: words[0].Text,
+// 	}, nil
+// }
 
-	return &sttv1.StartTestResponse{
-		UserId:     req.UserId,
-		TextToType: word,
-	}, nil
-}
+// func (s *SpeedTypingTestService) SubmitTest(ctx context.Context, req *sttv1.SubmitTestRequest) (*sttv1.SubmitTestResponse, error) {
+// 	// Предположим, что text_to_type передается в контексте или хранится в сервисе
+// 	textToType := "example text" // Замените на реальное значение
+// 	isCorrect := req.TypedText == textToType
+// 	accuracy := float32(1.0) // Замените на реальное значение
+// 	speed := float32(1.0)    // Замените на реальное значение
 
-func (s *SpeedTypingTestService) SubmitTest(ctx context.Context, req *sttv1.SubmitTestRequest) (*sttv1.SubmitTestResponse, error) {
-	// Реализуйте метод SubmitTest
-	return nil, nil
-}
+// 	return &sttv1.SubmitTestResponse{
+// 		Accuracy: accuracy,
+// 		Speed:    speed,
+// 	}, nil
+// }
 
-func (s *SpeedTypingTestService) EndTest(ctx context.Context, req *sttv1.EndTestRequest) (*sttv1.EndTestResponse, error) {
-	// Реализуйте метод EndTest
-	return nil, nil
-}
-
-func readWordsFromFile(filename string) ([]string, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	var words []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		words = append(words, scanner.Text())
-	}
-
-	return words, scanner.Err()
-}
+// func (s *SpeedTypingTestService) EndTest(ctx context.Context, req *sttv1.EndTestRequest) (*sttv1.EndTestResponse, error) {
+// 	// Реализуйте метод EndTest
+// 	return &sttv1.EndTestResponse{}, nil
+// }
